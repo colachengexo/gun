@@ -245,9 +245,11 @@ frame(Frame={goaway, StreamID, _, _}, State) ->
 %% Connection-wide WINDOW_UPDATE frame.
 frame({window_update, Increment}, State=#http2_state{local_window=ConnWindow})
 		when ConnWindow + Increment > 16#7fffffff ->
+	error_logger:error_msg("window_update_over: ConnWindow: ~p + Increment: ~p = ~p~n", [ConnWindow, Increment, ConnWindow + Increment]),
 	terminate(State, {connection_error, flow_control_error,
 		'The flow control window must not be greater than 2^31-1. (RFC7540 6.9.1)'});
 frame({window_update, Increment}, State=#http2_state{local_window=ConnWindow}) ->
+	error_logger:error_msg("window_update_normal: ConnWindow: ~p + Increment: ~p = ~p~n", [ConnWindow, Increment, ConnWindow + Increment]),
 	send_data(State#http2_state{local_window=ConnWindow + Increment});
 %% Stream-specific WINDOW_UPDATE frame.
 frame({window_update, StreamID, Increment}, State0=#http2_state{streams=Streams0}) ->
@@ -475,10 +477,12 @@ send_data(State=#http2_state{socket=Socket, transport=Transport, opts=Opts,
 			IolistSize = iolist_size(Iolist0),
 			if
 				IolistSize =< MaxSendSize ->
+					error_logger:error_msg("1. local_window: ConnWindow: ~p - IolistSize: ~p = ~p~n", [ConnWindow, IolistSize, ConnWindow - IolistSize]),
 					Transport:send(Socket, cow_http2:data(StreamID, IsFin, Iolist0)),
 					{State#http2_state{local_window=ConnWindow - IolistSize},
 						Stream#stream{local=IsFin, local_window=StreamWindow - IolistSize}};
 				true ->
+					error_logger:error_msg("2. local_window: ConnWindow: ~p - MaxSendSize: ~p = ~p~n", [ConnWindow, MaxSendSize, ConnWindow - MaxSendSize]),
 					{Iolist, More} = cow_iolists:split(MaxSendSize, Iolist0),
 					Transport:send(Socket, cow_http2:data(StreamID, nofin, Iolist)),
 					send_data(State#http2_state{local_window=ConnWindow - MaxSendSize},
